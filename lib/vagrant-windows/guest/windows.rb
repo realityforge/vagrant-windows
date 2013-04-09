@@ -12,7 +12,9 @@ module Vagrant
 
       def change_host_name(name)
         #### on windows, renaming a computer seems to require a reboot
-        vm.channel.execute("wmic computersystem where name=\"%COMPUTERNAME%\" call rename name=\"#{name}\"")
+        @vm.channel.session.cmd("netdom renamecomputer %COMPUTERNAME% /force /reb:2 /newname:#{name}")
+        sleep 5
+        wait_for_state :running, @vm.config.windows.halt_timeout, @vm.config.windows.halt_check_interval
       end
 
       # TODO: I am sure that ciphering windows versions will be important at some point
@@ -22,23 +24,24 @@ module Vagrant
 
       def halt
         @vm.channel.execute("shutdown /s /t 1 /c \"Vagrant Halt\" /f /d p:4:1")
-
         # Wait until the VM's state is actually powered off. If this doesn't
         # occur within a reasonable amount of time (15 seconds by default),
         # then simply return and allow Vagrant to kill the machine.
-        count = 0
-        while @vm.state != :poweroff
-          count += 1
+        wait_for_state :poweroff, @vm.config.windows.halt_timeout, @vm.config.windows.halt_check_interval
+      end
 
-          return if count >= @vm.config.windows.halt_timeout
-          sleep @vm.config.windows.halt_check_interval
+      def wait_for_state(state, timeout, interval)
+        count = 0
+        while @vm.state != state
+          count += 1
+          return if count > timeout
+          sleep interval
         end
       end
 
       def mount_shared_folder(name, guestpath, options)
         mount_script = TemplateRenderer.render(File.expand_path("#{File.dirname(__FILE__)}/../scripts/mount_volume.ps1"),
                                           :options => {:mount_point => guestpath, :name => name})
-
         @vm.channel.execute(mount_script,{:shell => :powershell})
       end
 
