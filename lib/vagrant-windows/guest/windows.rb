@@ -62,7 +62,7 @@ module Vagrant
       end
 
       def configure_networks(networks)
-        ### HACK!!!!! 
+        ### HACK!!!!!
         Nori.advanced_typecasting = false
         if driver_mac_address = @vm.driver.read_mac_addresses
           driver_mac_address = driver_mac_address.invert
@@ -71,20 +71,29 @@ module Vagrant
         vm_interface_map = {}
         @vm.channel.session.wql("SELECT * FROM Win32_NetworkAdapter WHERE NetConnectionStatus=2")[:win32_network_adapter].each do |nic|
           naked_mac = nic[:mac_address].gsub(':','')
+
           if driver_mac_address[naked_mac]
-            vm_interface_map[driver_mac_address[naked_mac]] = { :name => nic[:net_connection_id], :mac_address => naked_mac, :index => nic[:interface_index] }
+            vm_interface_map[driver_mac_address[naked_mac]] = {
+              :name => nic[:net_connection_id],
+              :mac_address => naked_mac,
+              :index => nic[:interface_index]
+            }
           end
         end
         networks.each do |network|
+          interface_name = vm_interface_map[network[:interface]+1][:name]
+          interface_index = vm_interface_map[network[:interface]+1][:index]
+
           if network[:type].to_sym == :static
-              vm.channel.execute("netsh interface ip set address \"#{vm_interface_map[network[:interface]+1][:name]}\" static #{network[:ip]} #{network[:netmask]}")
+            @vm.channel.execute("netsh interface ip set address \"#{interface_name}\" static #{network[:ip]} #{network[:netmask]}")
+
           elsif network[:type].to_sym == :dhcp
-            vm.channel.execute("netsh interface ip set address \"#{vm_interface_map[network[:interface]+1][:name]}\" dhcp")
+
+            if !vm.channel.test("if (-not (netsh interface ip show address \"#{interface_name}\" | where \{$_ -match \"DHCP enabled:\s+Yes\"\})) \{exit 1\} ")
+              vm.channel.execute("netsh interface ip set address \"#{interface_name}\" dhcp")
+            end
           end
         end
-
-        #netsh interface ip set address name="Local Area Connection" static 192.168.0.100 255.255.255.0 192.168.0.1 1
-        
       end
 
 
