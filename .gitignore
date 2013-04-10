@@ -3,3 +3,7 @@
 Gemfile.lock
 pkg
 rdoc
+# IntelliJ project files
+/*.iml
+/*.ipr
+/*.iws
